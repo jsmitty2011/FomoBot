@@ -1,0 +1,43 @@
+name: FOMO Scanner
+
+on:
+  schedule:
+    - cron: "*/5 * * * *"   # every 5 minutes (GitHub's minimum)
+  workflow_dispatch:
+    inputs:
+      test:
+        description: "Send a test message to Telegram"
+        type: boolean
+        default: true
+
+permissions:
+  contents: write   # lets it save seen.json so you don't get repeats
+
+concurrency:
+  group: fomo-scanner
+  cancel-in-progress: false
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 4
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Scan for new coins
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          SEND_TEST: ${{ github.event.inputs.test }}
+        run: node scanner.mjs
+
+      - name: Save seen coins
+        run: |
+          git config user.name "fomo-bot"
+          git config user.email "fomo-bot@users.noreply.github.com"
+          git add seen.json
+          git diff --cached --quiet || (git commit -m "update seen coins" && 
